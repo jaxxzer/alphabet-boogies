@@ -13,13 +13,17 @@ window.onload = function() {
     
     "use strict";
     
-    var game = new Phaser.Game( 1000, 800, Phaser.CANVAS, 'game', { preload: preload, create: create, update: update, render: render} );
+    var game = new Phaser.Game( 1000, 700, Phaser.CANVAS, 'game', { preload: preload, create: create, update: update, render: render} );
     
     function preload() {
         game.load.audio('shoot', 'assets/shoot.ogg');
         game.load.audio('explosion', 'assets/explosion.ogg');
+        game.load.image('bed', 'assets/dude.png');
         game.load.image('gun', 'assets/laser_gun.png');
+        game.load.image('room', 'assets/Bedroom.jpg');
         game.load.image('laser', 'assets/laser.gif');
+        game.load.image('nightlight', 'assets/lgBlackGradientTransparentBG.png');
+        game.load.image('bed_awake', 'assets/dude_wokeup.png' )
         game.load.spritesheet('kaboom', 'assets/explode.png', 128, 128);
 
         // Load all our alphabet boogie monsters
@@ -32,8 +36,8 @@ window.onload = function() {
         }   
     }
     
+    var lightMask;
     var gun;
-
     var text;
     var boogies;
     var line;
@@ -42,7 +46,27 @@ window.onload = function() {
     var shootSound, explosionSound;
     
     var explosions;
+    var graphics;
+    var bed;
+    var nightlight;
+    var nightlightScaleY = 1.5;
     function create() {
+        
+        
+        var bedroom = game.add.sprite(0, 0, 'room');
+        bedroom.scale.setTo(2.3,2.2);
+        bedroom.alpha = 1;
+        
+        bed = game.add.sprite(0, game.world.centerY, 'bed');
+        bed.scale.setTo(0.5);
+        bed.anchor.setTo(0, 0.5);
+        game.physics.enable(bed, Phaser.Physics.ARCADE);
+
+
+        
+        //nightlight.alpha = 0.5;
+        
+        
         shootSound = game.add.audio('shoot');
         shootSound.addMarker('shoot', 0.0, 1.0);
         shootSound.allowMultiple = true;
@@ -50,9 +74,9 @@ window.onload = function() {
         explosionSound.addMarker('explosion', 0.0, 1.5);
         explosionSound.allowMultiple = true;
         
-                //  An explosion pool
+        //  An explosion pool
         explosions = game.add.group();
-        explosions.createMultiple(30, 'kaboom');
+        explosions.createMultiple(26, 'kaboom');
         explosions.forEach(setupInvader, this);
         
         gun = game.add.sprite(100, game.world.centerY, 'gun');
@@ -75,7 +99,6 @@ window.onload = function() {
         laser = game.add.sprite(0, 0, 'laser');
         laser.alpha = 0;
 
-
         // Some text for score status and balls remaining
         var style = { font: "25px Verdana", fill: "#9999ff", align: "left" };
         text = game.add.text( 120, 15, "", style );
@@ -85,39 +108,48 @@ window.onload = function() {
         line = new Phaser.Line(0,0,0,0);
         game.time.events.loop(Phaser.Timer.SECOND, resurrect, this);
         
-
-
+        
+        graphics = game.add.graphics(0, 0);
+        graphics.lineStyle(4, 0xffd900, 1);
+        graphics.beginFill(0x000000);
+        graphics.drawRect(0, 0, game.world.width, game.world.height);
+        graphics.endFill();
+        graphics.alpha = 0;
+        
+        nightlight = game.add.sprite(game.world.width, 0, 'nightlight');
+        nightlight.anchor.setTo(1, .9);
+        nightlight.angle = -90;
+        nightlight.scale.setTo(1, nightlightScaleY);
     }
-function setupInvader (invader) {
-
-    invader.anchor.x = 0.5;
-    invader.anchor.y = 0.5;
-    invader.animations.add('kaboom');
-
-}
-
-
-function resurrect() {
-    var maxBoogies = 26;
-    //  Get a dead item
-    var item;
-    if(boogies.countLiving() < maxBoogies) {
-        do {
-            item = boogies.getRandom(0, maxBoogies);
-        } while(item.alive == true);
+    
+    function setupInvader (invader) {
+        invader.anchor.x = 0.5;
+        invader.anchor.y = 0.5;
+        invader.animations.add('kaboom');
     }
 
-    if (item)
-    {
-        //  And bring it back to life
-        item.reset(game.world.width, game.world.randomY);
-        game.physics.arcade.moveToObject(item, gun, 60);
+    function resurrect() {
+        var maxBoogies = 26;
+        //  Get a dead item
+        var item;
+        if(boogies.countLiving() < maxBoogies) {
+            do {
+                item = boogies.getRandom(0, maxBoogies);
+            } while(item.alive == true);
+        }
 
-    } else {
-        text.setText("no item");
+        if (item)
+        {
+            //  And bring it back to life
+            item.reset(game.world.width, game.world.randomY);
+            game.physics.arcade.moveToObject(item, gun, 60);
+
+        } else {
+            text.setText("no item");
+        }
+
     }
-
-}
+    
     function keyboardInputCallback(event) {
         
         // Only perform action for letters pressed
@@ -125,13 +157,18 @@ function resurrect() {
             text.setText(event.keyCode);
 
             var boogie = boogies.iterate('keyCode', event.keyCode, Phaser.Group.RETURN_CHILD);
+            
             if (boogie != null && boogie.alive) {
-                
-                
                 fire(boogie);
-            }  
+                if(nightlightScaleY > 1.55) {
+                    nightlightScaleY -= .25;
+                    nightlight.scale.setTo(1, nightlightScaleY);
+                }
+            } else if(nightlightScaleY < 4.5) {
+                nightlightScaleY += .25;
+                nightlight.scale.setTo(1, nightlightScaleY);
+            }
         }
-
     }
     
     function fire(sprite) {
@@ -150,7 +187,6 @@ function resurrect() {
         tweenIn.chain(tweenOut);
         tweenIn.start();
 
-
         sprite.kill();
         
         //  And create an explosion :)
@@ -161,8 +197,12 @@ function resurrect() {
     }
     
     function update() {
-
-        
+        game.physics.arcade.overlap(bed, boogies, collisionHandler, null, this);
+    }
+    
+    function collisionHandler(bed, boogie) {
+        boogie.kill();
+        bed.loadTexture('bed_awake');
     }
     
     function render() {
