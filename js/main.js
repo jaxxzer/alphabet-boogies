@@ -36,37 +36,47 @@ window.onload = function() {
         }   
     }
     
-    var lightMask;
     var gun;
     var text;
     var boogies;
     var line;
     var laser;
-    var bullets
+    
+    var state = 0; // Current game state, 0 = not started, 1 = running
+    
+    // Sound objects
     var shootSound, explosionSound;
     
-    var explosions;
-    var graphics;
+    var explosions; // Explosion animations
+    var graphics; // Not used, but kept for example purposes in future assignments
+    
     var bed;
     var nightlight;
     var nightlightScaleY = 1.5;
+    
+    // The maximum number of letters from the beginning of alphabet that will be spawned
+    // ie 1 = only A, 26 = A through Z
+    // Change to adjust difficulty
+    var maxBoogies = 26;
+    
+    var score = 0;
+    
     function create() {
         
-        
+        // Bedroom scene background
         var bedroom = game.add.sprite(0, 0, 'room');
         bedroom.scale.setTo(2.3,2.2);
         bedroom.alpha = 1;
         
+        // Child in bed, boogie target
         bed = game.add.sprite(0, game.world.centerY, 'bed');
         bed.scale.setTo(0.5);
         bed.anchor.setTo(0, 0.5);
+        
+        // Enable Arcade Physics
         game.physics.enable(bed, Phaser.Physics.ARCADE);
 
-
-        
-        //nightlight.alpha = 0.5;
-        
-        
+        // Setup sounds
         shootSound = game.add.audio('shoot');
         shootSound.addMarker('shoot', 0.0, 1.0);
         shootSound.allowMultiple = true;
@@ -74,17 +84,20 @@ window.onload = function() {
         explosionSound.addMarker('explosion', 0.0, 1.5);
         explosionSound.allowMultiple = true;
         
-        //  An explosion pool
+        // An explosion animation pool
         explosions = game.add.group();
         explosions.createMultiple(26, 'kaboom');
-        explosions.forEach(setupInvader, this);
+        explosions.forEach(setupBoogie, this);
         
+        // Gun
         gun = game.add.sprite(100, game.world.centerY, 'gun');
         gun.scale.setTo(0.07);
         gun.anchor.setTo(1, 0.2);
         
+        // Setup keyboard input
         this.game.input.keyboard.onDownCallback = keyboardInputCallback;
         
+        // Setup alphabet boogie monsters
         boogies = game.add.group();
         boogies.enableBody = true;
         boogies.physicsBodyType = Phaser.Physics.ARCADE;
@@ -93,22 +106,20 @@ window.onload = function() {
             boogie.anchor.setTo(0.5, 0.5);
             boogie.keyCode = i; // Simply the ascii value of this letter
             boogie.kill();
-            //var explode = boogie.animations.add('kaboom');
         }
         
+        // Laser beam shot from the gun
         laser = game.add.sprite(0, 0, 'laser');
         laser.alpha = 0;
 
         // Some text for score status and balls remaining
-        var style = { font: "25px Verdana", fill: "#9999ff", align: "left" };
+        var style = { font: "40px Verdana", fill: "#ffffff", align: "left" };
         text = game.add.text( 120, 15, "", style );
         text.anchor.setTo(0.5, 0.0);
-        text.setText(String.fromCharCode(66));
+        text.setText("Click to begin!");
         
-        line = new Phaser.Line(0,0,0,0);
-        game.time.events.loop(Phaser.Timer.SECOND, resurrect, this);
-        
-        
+        // Graphics overlay to dim the entire scene
+        // (Not used)
         graphics = game.add.graphics(0, 0);
         graphics.lineStyle(4, 0xffd900, 1);
         graphics.beginFill(0x000000);
@@ -116,63 +127,84 @@ window.onload = function() {
         graphics.endFill();
         graphics.alpha = 0;
         
+        // Gradient from black to transparent overlaid on entire scene
+        // Change scale to simulate night light dimming
         nightlight = game.add.sprite(game.world.width, 0, 'nightlight');
         nightlight.anchor.setTo(1, .9);
         nightlight.angle = -90;
         nightlight.scale.setTo(1, nightlightScaleY);
+        
+        game.input.onDown.add(startGame, this);
     }
     
-    function setupInvader (invader) {
-        invader.anchor.x = 0.5;
-        invader.anchor.y = 0.5;
-        invader.animations.add('kaboom');
+    function startGame() {
+        if(state == 0) { // Only start one event timer
+            // Ressurect a new boogie every second
+            game.time.events.loop(Phaser.Timer.SECOND, resurrect, this);
+            text.setText("Score: " + score);
+            state = 1;
+        }
+    }
+    
+    // Add explosion animations to the boogies
+    function setupBoogie (boogie) {
+        boogie.anchor.x = 0.5;
+        boogie.anchor.y = 0.5;
+        boogie.animations.add('kaboom');
     }
 
+    // Bring a new boogie in to attack
     function resurrect() {
-        var maxBoogies = 26;
-        //  Get a dead item
-        var item;
+        var boogie;
+        
+        // Only bring a new boogie in if all available boogies are not yet on the attack
         if(boogies.countLiving() < maxBoogies) {
+            // Not at all efficient, but gets the job done for the moment
             do {
-                item = boogies.getRandom(0, maxBoogies);
-            } while(item.alive == true);
+                boogie = boogies.getRandom(0, maxBoogies);
+            } while(boogie.alive == true);
         }
 
-        if (item)
-        {
-            //  And bring it back to life
-            item.reset(game.world.width, game.world.randomY);
-            game.physics.arcade.moveToObject(item, gun, 60);
-
-        } else {
-            text.setText("no item");
+        if (boogie) {
+            boogie.reset(game.world.width, game.world.randomY); // Bring it back to life
+            game.physics.arcade.moveToObject(boogie, gun, 60); // Set it loose
         }
-
     }
     
+    // Main game logic, called every time a key is pressed
     function keyboardInputCallback(event) {
         
-        // Only perform action for letters pressed
+        // Only perform action for letter keys pressed
         if(event.keyCode >= 65 && event.keyCode <= 90) {
-            text.setText(event.keyCode);
-
+            
+            // Get the boogie corresponding to the letter pressed
             var boogie = boogies.iterate('keyCode', event.keyCode, Phaser.Group.RETURN_CHILD);
             
-            if (boogie != null && boogie.alive) {
-                fire(boogie);
+            if (boogie != null && boogie.alive) { // Score, we hit a boogie on the attack
+                fire(boogie); // Kill that boogie
                 if(nightlightScaleY > 1.55) {
-                    nightlightScaleY -= .25;
+                    nightlightScaleY -= .25; // Push the darkness back
                     nightlight.scale.setTo(1, nightlightScaleY);
                 }
-            } else if(nightlightScaleY < 4.5) {
-                nightlightScaleY += .25;
+                score += 10;
+                
+            } else if(nightlightScaleY < 4.5) { // Fail, we pressed an incorrect letter
+                nightlightScaleY += .25; // The darkness extends towards the bed
                 nightlight.scale.setTo(1, nightlightScaleY);
+                
+                if(score > 0)
+                    score -= 10;
             }
+            
+            text.setText("Score: " + score); // Update score
         }
     }
     
+    // Shoot and kill a boogie on the screen
     function fire(sprite) {
         shootSound.play('shoot');
+        
+        // Position the laser beam
         laser.scale.setTo(1);
         laser.anchor.setTo(15/laser.width,58/laser.height);
         laser.x = gun.x;
@@ -181,13 +213,14 @@ window.onload = function() {
         laser.scale.setTo(game.physics.arcade.distanceBetween(gun, sprite)/(laser.width-40), .5);
         laser.alpha = 0;
         
+        // Animate the laser beam
         var tweenIn = game.add.tween(laser).to({ alpha: 1 }, 100, Phaser.Easing.Linear.None, false);
         var tweenOut = game.add.tween(laser).to({ alpha: 0 }, 100, Phaser.Easing.Linear.None, false);
         
         tweenIn.chain(tweenOut);
         tweenIn.start();
 
-        sprite.kill();
+        sprite.kill(); // Kill  the boogie
         
         //  And create an explosion :)
         var explosion = explosions.getFirstExists(false);
@@ -196,13 +229,16 @@ window.onload = function() {
         explosionSound.play('explosion');
     }
     
+    
     function update() {
+        // Check if a boogie has made it all the way to the bed
         game.physics.arcade.overlap(bed, boogies, collisionHandler, null, this);
     }
     
+    // A boogie made it to the bed
     function collisionHandler(bed, boogie) {
         boogie.kill();
-        bed.loadTexture('bed_awake');
+        bed.loadTexture('bed_awake'); // Scare the kid
     }
     
     function render() {
